@@ -147,16 +147,4 @@ To verify uninterrupted write availability during a node failure:
 
 ## Team & Deliverables
 
-* **Developers:** `<Developer A Name>` & `<Developer B Name>`
-
-* **Submission Checklist (Due: December 4, 2026):**
-
-  * \[ \] 3-Node MongoDB Replica Set (`docker-compose.yml`)
-
-  * \[ \] FastAPI ingestion endpoints & synthetic dataset generator (`seed.py`)
-
-  * \[ \] Query implementations & `< 100 ms` latency benchmarks (`Q1`–`Q6`)
-
-  * \[ \] Live Streamlit dashboard with all 4 mandatory views
-
-  * \[ \] Academic PDF Report (Database justification, CAP theorem trade-offs, alternatives comparison, architecture diagrams, scripts, and dashboard screenshots)
+* **Developers:** CHACHA MOHAMMED NADJIB & KERROUCHE FOUAD
