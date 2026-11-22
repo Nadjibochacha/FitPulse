@@ -1,0 +1,14 @@
+# Database Driver (MongoDB Replica Set)
+pymongo>=4.10.0
+
+# Backend Ingestion & REST API
+fastapi[standard]>=0.115.0
+
+# Live Dashboard & Visualizations
+streamlit>=1.40.0
+plotly>=5.24.0
+pandas>=2.2.0
+
+# Synthetic Data Generation & Testing
+faker>=30.0.0
+requests>=2.32.0
