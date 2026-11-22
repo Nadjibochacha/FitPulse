@@ -1,0 +1,93 @@
+services:
+  mongo1:
+    image: mongo:8.0
+    container_name: mongo1
+    hostname: mongo1
+    command: ["mongod", "--replSet", "rs0", "--port", "27017", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1_data:/data/db
+    networks:
+      - fitpulse-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27017", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo2:
+    image: mongo:8.0
+    container_name: mongo2
+    hostname: mongo2
+    command: ["mongod", "--replSet", "rs0", "--port", "27018", "--bind_ip_all"]
+    ports:
+      - "27018:27018"
+    volumes:
+      - mongo2_data:/data/db
+    networks:
+      - fitpulse-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27018", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo3:
+    image: mongo:8.0
+    container_name: mongo3
+    hostname: mongo3
+    command: ["mongod", "--replSet", "rs0", "--port", "27019", "--bind_ip_all"]
+    ports:
+      - "27019:27019"
+    volumes:
+      - mongo3_data:/data/db
+    networks:
+      - fitpulse-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27019", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo-init:
+    image: mongo:8.0
+    container_name: mongo-init
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+    networks:
+      - fitpulse-net
+    entrypoint:
+      - bash
+      - -c
+      - |
+        mongosh --host mongo1:27017 --eval '
+        try {
+          rs.status();
+          print("Replica set already initialized.");
+        } catch (e) {
+          rs.initiate({
+            _id: "rs0",
+            members: [
+              { _id: 0, host: "mongo1:27017", priority: 2 },
+              { _id: 1, host: "mongo2:27018", priority: 1 },
+              { _id: 2, host: "mongo3:27019", priority: 1 }
+            ]
+          });
+          print("Replica set rs0 initialized successfully.");
+        }'
+    restart: "no"
+
+volumes:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
+
+networks:
+  fitpulse-net:
+    driver: bridge
