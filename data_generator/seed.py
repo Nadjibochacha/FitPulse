@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 from faker import Faker
 
-# Allow running directly via `python data_generator/seed.py` from repo root
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_db, init_indexes
 
@@ -15,7 +14,7 @@ random.seed(42)
 Faker.seed(42)
 
 CITIES = {
-    "Constantine": [6.6147, 36.3650],   # [longitude, latitude]
+    "Constantine": [6.6147, 36.3650],
     "Algiers": [3.0588, 36.7538],
     "Oran": [-0.6331, 35.6971],
     "Annaba": [7.7667, 36.9000],
@@ -29,7 +28,7 @@ DEVICE_PROFILES = ["smartwatch_pro_v2", "mobile_app_ios", "mobile_app_android", 
 
 
 def generate_gps_route(base_coords: list[float], points: int = 8) -> list[dict]:
-    """Generate a small sequence of GPS waypoints around a city's coordinates."""
+
     lon, lat = base_coords
     route = []
     for i in range(points):
@@ -40,13 +39,13 @@ def generate_gps_route(base_coords: list[float], points: int = 8) -> list[dict]:
 
 
 def generate_heart_rate_series(samples: int = 12) -> list[int]:
-    """Generate realistic BPM telemetry samples."""
+
     base_hr = random.randint(115, 145)
     return [max(75, min(195, base_hr + random.randint(-15, 25))) for _ in range(samples)]
 
 
 def build_polymorphic_activity(user_id: str, ts: datetime, forced_city: str = None, forced_variant: str = None) -> dict:
-    """Create a workout, meal, or body-metric document with deliberately varied fields."""
+
     variant = forced_variant or random.choices(
         ["workout_full_telemetry", "workout_photos", "workout_minimal", "meal", "body_metric"],
         weights=[35, 20, 25, 12, 8],

@@ -11,7 +11,6 @@ DB_NAME = os.getenv("MONGO_DB_NAME", "fitpulse")
 
 
 def get_client() -> MongoClient:
-    """Return a MongoClient connected to the 3-node FitPulse replica set."""
     return MongoClient(
         MONGO_URI,
         serverSelectionTimeoutMS=5000,
@@ -21,13 +20,11 @@ def get_client() -> MongoClient:
 
 
 def get_db():
-    """Return the FitPulse database instance."""
     client = get_client()
     return client[DB_NAME]
 
 
 def init_indexes(db=None) -> None:
-    """Create indexes supporting sub-100ms latency for Q2, Q3, Q4, Q5, and Q6."""
     if db is None:
         db = get_db()
 
