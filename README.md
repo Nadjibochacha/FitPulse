@@ -38,7 +38,6 @@ fitpulse/
 ├── data_generator/           # Index initialization & synthetic multi-device seeder
 ├── queries/                  # Mandatory queries (Q1–Q6) & < 100 ms benchmark scripts
 ├── dashboard/                # Live Streamlit web dashboard application
-├── report/                   # Excalidraw architecture diagrams & academic PDF report
 └── README.md
 
 ```
