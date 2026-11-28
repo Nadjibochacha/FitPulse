@@ -2,7 +2,7 @@ import os
 import sys
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +17,7 @@ from queries.analytics_queries import (
     detect_multicity_24h_q4,
     get_daily_calorie_rollup_q5,
     get_recent_activities_q2,
+    find_nearby_workouts,
 )
 from data_generator.stream_simulator import (
     get_stream_status,
@@ -164,4 +165,28 @@ def halt_live_stream():
     return {
         "message": "Stop signal sent to wearable stream",
         "state": stop_wearable_stream(),
+    }
+
+@app.get("/activities/nearby")
+def search_nearby_workouts(
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Center longitude (e.g. 6.6147 for Constantine)"),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Center latitude (e.g. 36.3650 for Constantine)"),
+    radius_km: float = Query(10.0, gt=0.0, le=500.0, description="Search radius in kilometers"),
+    activity_type: Optional[str] = Query(None, description="Optional filter: running, cycling, hiit, etc."),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Geospatial proximity search powered by MongoDB 2dsphere index."""
+    workouts, latency_ms = find_nearby_workouts(
+        lon=lon,
+        lat=lat,
+        radius_km=radius_km,
+        activity_type=activity_type,
+        limit=limit,
+    )
+    return {
+        "center": {"lon": lon, "lat": lat},
+        "radius_km": radius_km,
+        "latency_ms": latency_ms,
+        "count": len(workouts),
+        "workouts": workouts,
     }
