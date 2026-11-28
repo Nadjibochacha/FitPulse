@@ -2,7 +2,7 @@ import os
 import sys
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +17,11 @@ from queries.analytics_queries import (
     detect_multicity_24h_q4,
     get_daily_calorie_rollup_q5,
     get_recent_activities_q2,
+)
+from data_generator.stream_simulator import (
+    get_stream_status,
+    run_wearable_stream,
+    stop_wearable_stream,
 )
 
 app = FastAPI(
@@ -119,4 +124,44 @@ def read_daily_calories(user_id: str, days: int = 14):
         "days": days,
         "latency_ms": latency_ms,
         "daily_rollup": rollup,
+    }
+@app.post("/simulate/stream", status_code=202)
+def start_live_stream(
+    background_tasks: BackgroundTasks,
+    duration_seconds: int = 30,
+    interval_seconds: float = 0.5,
+    include_multicity_anomaly: bool = True,
+):
+    """Start a background stream of polymorphic wearable events."""
+    status = get_stream_status()
+    if status["is_running"]:
+        return {"message": "Stream is already running", "state": status}
+
+    safe_duration = min(max(1, duration_seconds), 300)
+    safe_interval = max(0.1, interval_seconds)
+
+    background_tasks.add_task(
+        run_wearable_stream,
+        duration_seconds=safe_duration,
+        interval_seconds=safe_interval,
+        include_multicity_anomaly=include_multicity_anomaly,
+    )
+    return {
+        "message": f"Started live wearable stream for {safe_duration}s (every {safe_interval}s)",
+        "expected_events": int(safe_duration / safe_interval),
+    }
+
+
+@app.get("/simulate/status")
+def read_stream_status():
+    """Poll real-time progress and average ingestion latency of the wearable stream."""
+    return get_stream_status()
+
+
+@app.post("/simulate/stop")
+def halt_live_stream():
+    """Stop an active wearable stream early."""
+    return {
+        "message": "Stop signal sent to wearable stream",
+        "state": stop_wearable_stream(),
     }
