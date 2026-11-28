@@ -2,7 +2,7 @@ import os
 import sys
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,6 +17,13 @@ from queries.analytics_queries import (
     detect_multicity_24h_q4,
     get_daily_calorie_rollup_q5,
     get_recent_activities_q2,
+    find_nearby_workouts,
+    profile_collection_schema,
+)
+from data_generator.stream_simulator import (
+    get_stream_status,
+    run_wearable_stream,
+    stop_wearable_stream,
 )
 
 app = FastAPI(
@@ -119,4 +126,77 @@ def read_daily_calories(user_id: str, days: int = 14):
         "days": days,
         "latency_ms": latency_ms,
         "daily_rollup": rollup,
+    }
+@app.post("/simulate/stream", status_code=202)
+def start_live_stream(
+    background_tasks: BackgroundTasks,
+    duration_seconds: int = 30,
+    interval_seconds: float = 0.5,
+    include_multicity_anomaly: bool = True,
+):
+    """Start a background stream of polymorphic wearable events."""
+    status = get_stream_status()
+    if status["is_running"]:
+        return {"message": "Stream is already running", "state": status}
+
+    safe_duration = min(max(1, duration_seconds), 300)
+    safe_interval = max(0.1, interval_seconds)
+
+    background_tasks.add_task(
+        run_wearable_stream,
+        duration_seconds=safe_duration,
+        interval_seconds=safe_interval,
+        include_multicity_anomaly=include_multicity_anomaly,
+    )
+    return {
+        "message": f"Started live wearable stream for {safe_duration}s (every {safe_interval}s)",
+        "expected_events": int(safe_duration / safe_interval),
+    }
+
+
+@app.get("/simulate/status")
+def read_stream_status():
+    """Poll real-time progress and average ingestion latency of the wearable stream."""
+    return get_stream_status()
+
+
+@app.post("/simulate/stop")
+def halt_live_stream():
+    """Stop an active wearable stream early."""
+    return {
+        "message": "Stop signal sent to wearable stream",
+        "state": stop_wearable_stream(),
+    }
+
+@app.get("/activities/nearby")
+def search_nearby_workouts(
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Center longitude (e.g. 6.6147 for Constantine)"),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Center latitude (e.g. 36.3650 for Constantine)"),
+    radius_km: float = Query(10.0, gt=0.0, le=500.0, description="Search radius in kilometers"),
+    activity_type: Optional[str] = Query(None, description="Optional filter: running, cycling, hiit, etc."),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Geospatial proximity search powered by MongoDB 2dsphere index."""
+    workouts, latency_ms = find_nearby_workouts(
+        lon=lon,
+        lat=lat,
+        radius_km=radius_km,
+        activity_type=activity_type,
+        limit=limit,
+    )
+    return {
+        "center": {"lon": lon, "lat": lat},
+        "radius_km": radius_km,
+        "latency_ms": latency_ms,
+        "count": len(workouts),
+        "workouts": workouts,
+    }
+
+@app.get("/analytics/schema-profile")
+def read_schema_profile(sample_limit: int = Query(5000, ge=10, le=50000)):
+    """Inspect polymorphic field sparsity and per-device schemas across activities."""
+    profile, latency_ms = profile_collection_schema(sample_limit=sample_limit)
+    return {
+        "latency_ms": latency_ms,
+        **profile,
     }

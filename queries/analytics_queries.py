@@ -34,7 +34,6 @@ def get_recent_activities_q2(
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     return results, latency_ms
 
-
 def detect_multicity_24h_q4(
     window_hours: int = 24, db=None
 ) -> tuple[list[dict[str, Any]], float]:
@@ -93,7 +92,6 @@ def detect_multicity_24h_q4(
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     return flagged_users, latency_ms
 
-
 def get_daily_calorie_rollup_q5(
     user_id: str, days: int = 14, db=None
 ) -> tuple[list[dict[str, Any]], float]:
@@ -138,3 +136,141 @@ def get_daily_calorie_rollup_q5(
     daily_summary = list(db["activities"].aggregate(pipeline))
     latency_ms = round((time.perf_counter() - start) * 1000, 2)
     return daily_summary, latency_ms
+
+def find_nearby_workouts(
+    lon: float,
+    lat: float,
+    radius_km: float = 10.0,
+    activity_type: str | None = None,
+    limit: int = 20,
+    db=None,
+) -> tuple[list[dict[str, Any]], float]:
+    """
+    Geospatial Search: Find workouts within `radius_km` of [lon, lat]
+    using the 2dsphere index, ordered from nearest to farthest.
+    """
+    if db is None:
+        db = get_db()
+
+    match_filter: dict[str, Any] = {"category": "workout"}
+    if activity_type:
+        match_filter["activity_type"] = activity_type
+
+    start = time.perf_counter()
+    pipeline = [
+        {
+            "$geoNear": {
+                "near": {"type": "Point", "coordinates": [lon, lat]},
+                "distanceField": "distance_meters",
+                "maxDistance": radius_km * 1000,
+                "spherical": True,
+                "query": match_filter,
+            }
+        },
+        {"$limit": limit},
+        {
+            "$project": {
+                "_id": 0,
+                "activity_id": 1,
+                "user_id": 1,
+                "activity_type": 1,
+                "device_type": 1,
+                "city": 1,
+                "location": 1,
+                "duration_minutes": 1,
+                "calories": 1,
+                "timestamp": 1,
+                "distance_km": {"$round": [{"$divide": ["$distance_meters", 1000]}, 3]},
+            }
+        },
+    ]
+
+    results = []
+    for doc in db["activities"].aggregate(pipeline):
+        if isinstance(doc.get("timestamp"), datetime):
+            doc["timestamp"] = doc["timestamp"].isoformat()
+        results.append(doc)
+
+    latency_ms = round((time.perf_counter() - start) * 1000, 2)
+    return results, latency_ms
+
+def profile_collection_schema(
+    sample_limit: int = 5000, db=None
+) -> tuple[dict[str, Any], float]:
+    """
+    Dynamic Schema Profiler: Inspect polymorphic documents in `activities`
+    using $objectToArray and $type to measure field presence percentages
+    and per-device schema shapes.
+    """
+    if db is None:
+        db = get_db()
+
+    start = time.perf_counter()
+    total_docs = min(db["activities"].count_documents({}), sample_limit)
+
+    if total_docs == 0:
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {"total_documents_analyzed": 0, "fields": [], "device_schemas": []}, latency_ms
+
+    # 1. Field-level frequency and BSON data types
+    field_pipeline = [
+        {"$limit": sample_limit},
+        {"$project": {"kv": {"$objectToArray": "$$ROOT"}}},
+        {"$unwind": "$kv"},
+        {"$match": {"kv.k": {"$ne": "_id"}}},
+        {
+            "$group": {
+                "_id": "$kv.k",
+                "doc_count": {"$sum": 1},
+                "bson_types": {"$addToSet": {"$type": "$kv.v"}},
+            }
+        },
+        {"$sort": {"doc_count": -1, "_id": 1}},
+    ]
+
+    fields_summary = []
+    for row in db["activities"].aggregate(field_pipeline):
+        fields_summary.append(
+            {
+                "field_name": row["_id"],
+                "doc_count": row["doc_count"],
+                "presence_pct": round((row["doc_count"] / total_docs) * 100, 1),
+                "bson_types": sorted(row["bson_types"]),
+            }
+        )
+
+    # 2. Per-device schema comparison (for Streamlit Schema Variety view)
+    device_pipeline = [
+        {"$limit": sample_limit},
+        {"$match": {"device_type": {"$exists": True, "$ne": None}}},
+        {"$project": {"device_type": 1, "kv": {"$objectToArray": "$$ROOT"}}},
+        {"$unwind": "$kv"},
+        {"$match": {"kv.k": {"$ne": "_id"}}},
+        {
+            "$group": {
+                "_id": "$device_type",
+                "unique_fields": {"$addToSet": "$kv.k"},
+            }
+        },
+        {"$sort": {"_id": 1}},
+    ]
+
+    device_schemas = []
+    for row in db["activities"].aggregate(device_pipeline):
+        sorted_fields = sorted(row["unique_fields"])
+        device_schemas.append(
+            {
+                "device_type": row["_id"],
+                "field_count": len(sorted_fields),
+                "fields": sorted_fields,
+            }
+        )
+
+    latency_ms = round((time.perf_counter() - start) * 1000, 2)
+    return {
+        "total_documents_analyzed": total_docs,
+        "unique_field_count": len(fields_summary),
+        "fields": fields_summary,
+        "device_schemas": device_schemas,
+    }, latency_ms
+
