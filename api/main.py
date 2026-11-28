@@ -13,6 +13,11 @@ from queries.queries import (
     run_q1_ten_varied_workouts,
     update_user_profile_q3,
 )
+from queries.analytics_queries import (
+    detect_multicity_24h_q4,
+    get_daily_calorie_rollup_q5,
+    get_recent_activities_q2,
+)
 
 app = FastAPI(
     title="FitPulse Ingestion & Profile API",
@@ -79,4 +84,39 @@ def read_leaderboard(limit: int = 10):
         "latency_ms": latency_ms,
         "count": len(leaderboard),
         "leaderboard": leaderboard,
+    }
+
+@app.get("/users/{user_id}/activities")
+def read_recent_activities(user_id: str, limit: int = 20):
+    """Q2: Retrieve a user's last 20 polymorphic activities."""
+    activities, latency_ms = get_recent_activities_q2(user_id=user_id, limit=limit)
+    return {
+        "user_id": user_id,
+        "latency_ms": latency_ms,
+        "count": len(activities),
+        "activities": activities,
+    }
+
+
+@app.get("/analytics/multi-city")
+def read_multicity_anomalies(window_hours: int = 24):
+    """Q4: Flag users logging workouts in 2+ different cities within 24 hours."""
+    flagged, latency_ms = detect_multicity_24h_q4(window_hours=window_hours)
+    return {
+        "window_hours": window_hours,
+        "latency_ms": latency_ms,
+        "flagged_count": len(flagged),
+        "users": flagged,
+    }
+
+
+@app.get("/users/{user_id}/calories/daily")
+def read_daily_calories(user_id: str, days: int = 14):
+    """Q5: Daily calorie expenditure rollup for a user."""
+    rollup, latency_ms = get_daily_calorie_rollup_q5(user_id=user_id, days=days)
+    return {
+        "user_id": user_id,
+        "days": days,
+        "latency_ms": latency_ms,
+        "daily_rollup": rollup,
     }

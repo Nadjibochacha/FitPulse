@@ -13,7 +13,7 @@ DB_NAME = os.getenv("MONGO_DB_NAME", "fitpulse")
 def get_client() -> MongoClient:
     return MongoClient(
         MONGO_URI,
-        serverSelectionTimeoutMS=5000,
+        serverSelectionTimeoutMS=15000,
         retryWrites=True,
         w="majority",
     )
