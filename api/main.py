@@ -18,6 +18,7 @@ from queries.analytics_queries import (
     get_daily_calorie_rollup_q5,
     get_recent_activities_q2,
     find_nearby_workouts,
+    profile_collection_schema,
 )
 from data_generator.stream_simulator import (
     get_stream_status,
@@ -189,4 +190,13 @@ def search_nearby_workouts(
         "latency_ms": latency_ms,
         "count": len(workouts),
         "workouts": workouts,
+    }
+
+@app.get("/analytics/schema-profile")
+def read_schema_profile(sample_limit: int = Query(5000, ge=10, le=50000)):
+    """Inspect polymorphic field sparsity and per-device schemas across activities."""
+    profile, latency_ms = profile_collection_schema(sample_limit=sample_limit)
+    return {
+        "latency_ms": latency_ms,
+        **profile,
     }
